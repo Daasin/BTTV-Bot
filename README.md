@@ -2,8 +2,11 @@
 Lets users track new [Better Twitch TV](https://betterttv.com/) emotes in different discord channels.
 
 ## Commands
+All commands require the "Manage Messages" permission.
 - `!add <regex>`: Tracks emotes matching the regular expression in the channel
 - `!remove <regex>`: Stops tracking emotes matching the regular expression in the channel
+- `!list`: Lists all tracked emotes in the channel
+- `!clear`: Removes all tracked emotes from the channel
 - `!reloaddb`: Reloads the database from the database file
 
 ## Install
