@@ -30,8 +30,12 @@ class BotDatabase:
         assert isinstance(channel_id, int)
 
         channel_id = str(channel_id)
-        
-        del self._data["channels"][channel_id]
+
+        if channel_id in self._data["channels"]:
+            del self._data["channels"][channel_id]
+            return True
+            
+        return False
 
     def add_emote_filter(self, channel_id: int, regex: str):
         assert isinstance(channel_id, int)
@@ -62,3 +66,13 @@ class BotDatabase:
 
         self._data["channels"][channel_id]["emote_filters"].remove(regex)
         return True
+
+    def get_emote_filters(self, channel_id: int):
+        assert isinstance(channel_id, int)
+
+        channel_id = str(channel_id)
+
+        if channel_id not in self._data["channels"]:
+            return []
+
+        return self._data["channels"][channel_id]["emote_filters"]

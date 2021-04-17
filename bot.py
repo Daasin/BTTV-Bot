@@ -1,5 +1,5 @@
 from discord.ext.tasks import loop
-from discord.ext.commands import Bot
+from discord.ext.commands import Bot, has_permissions
 import logging
 import re
 import os
@@ -74,6 +74,7 @@ def main(db_path: str, bttv_emotes_url: str, trigger: str, bot_id: str, update_i
         logging.info("Bot ready")
 
     @bot.command(name="add")
+    @has_permissions(manage_messages=True)
     async def add_emote_filter(ctx, new_emote_filter: str):
         logging.info(f"Trying to add emote filter {new_emote_filter} in channel {ctx.channel.name} (id: {ctx.channel.id}))")
         try:
@@ -85,9 +86,10 @@ def main(db_path: str, bttv_emotes_url: str, trigger: str, bot_id: str, update_i
         db.add_emote_filter(ctx.channel.id, new_emote_filter)
         db.save(db_path)
 
-        await ctx.send(f"Added {new_emote_filter}")
+        await ctx.send(f"Added `{new_emote_filter}`")
 
     @bot.command(name="remove")
+    @has_permissions(manage_messages=True)
     async def remove_emote_filter(ctx, emote_filter: str):
         logging.info(f"Trying to remove emote filter {emote_filter} in channel {ctx.channel.name} (id: {ctx.channel.id}))")
         try:
@@ -98,14 +100,35 @@ def main(db_path: str, bttv_emotes_url: str, trigger: str, bot_id: str, update_i
 
         if db.remove_emote_filter(ctx.channel.id, emote_filter):
             db.save(db_path)
-            await ctx.send(f"Removed {emote_filter}")
+            await ctx.send(f"Removed `{emote_filter}`")
         else:
-            await ctx.send(f"Could not remove {emote_filter}")
+            await ctx.send(f"Could not remove `{emote_filter}`")
 
     @bot.command(name="reloaddb")
+    @has_permissions(manage_messages=True)
     async def reload_db(ctx):
         db.load(db_path)
         await ctx.send(f"Reloaded database")
+
+    @bot.command(name="list")
+    @has_permissions(manage_messages=True)
+    async def list_emote_filters(ctx):
+        emote_filters = db.get_emote_filters(ctx.channel.id)
+        if emote_filters:
+            await ctx.send("Current filters: \n```%s```" % "\n".join(emote_filters))
+        else:
+            await ctx.send("No current filters")
+
+    @bot.command(name="clear")
+    @has_permissions(manage_messages=True)
+    async def remove_channel(ctx):
+        logging.info(f"Trying to remove channel {ctx.channel.name} (id: {ctx.channel.id}))")
+
+        if db.remove_channel(ctx.channel.id):
+            db.save(db_path)
+            await ctx.send(f"Removed channel `{ctx.channel.name}`")
+        else:
+            await ctx.send(f"Could not remove channel `{ctx.channel.name}` (maybe it wasn't even added?)")
 
     check_new_emotes.start()
 
