@@ -54,10 +54,11 @@ class BotDatabase:
 
         if channel_id not in self._data["channels"]:
             logging.warn(f"Channel with id {channel_id} not found")
-            return
+            return False
 
-        if regex not in self._data["channels"][channel_id]:
-            logging.warn(f"Emote filter for {regex} not found")
-            return
+        if regex not in self._data["channels"][channel_id]["emote_filters"]:
+            logging.warn(f"Emote filter for {regex} not found (filters: {self._data['channels'][channel_id]['emote_filters']})")
+            return False
 
-        self._data["channels"][channel_id].remove(regex)
+        self._data["channels"][channel_id]["emote_filters"].remove(regex)
+        return True

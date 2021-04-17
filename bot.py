@@ -13,21 +13,26 @@ load_dotenv()
 
 def setup_logging():
     logging.root.handlers = []
-    logging.basicConfig(format="%(asctime)s : %(levelname)s : %(message)s", level=logging.INFO , filename="log.txt")
 
-    console = logging.StreamHandler()
-    console.setLevel(logging.DEBUG)
-    
+    file_handler = logging.FileHandler("log.txt", "w", encoding="utf-8")
+
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
     formatter = logging.Formatter("%(asctime)s : %(levelname)s : %(message)s")
-    console.setFormatter(formatter)
-    logging.getLogger("").addHandler(console)
+    console_handler.setFormatter(formatter)
+
+    logging.basicConfig(format="%(asctime)s : %(levelname)s : %(message)s", level=logging.INFO , handlers=[
+        file_handler,
+        console_handler,
+    ])
 
 @click.command()
 @click.option("--db-path", type=click.Path(dir_okay=False), default="db.json")
 @click.option("--bttv-emotes-url", type=click.STRING, default="https://api.betterttv.net/3/emotes/shared?limit=50")
 @click.option("--trigger", type=click.STRING, default="!")
 @click.option("--bot-id", type=click.STRING, default=lambda: os.environ.get("EMOTE_BOT_ID", ""))
-def main(db_path: str, bttv_emotes_url: str, trigger: str, bot_id: str):
+@click.option("--update-interval", type=click.INT, default=30)
+def main(db_path: str, bttv_emotes_url: str, trigger: str, bot_id: str, update_interval: int):
     setup_logging()
 
     db = BotDatabase()
@@ -38,17 +43,15 @@ def main(db_path: str, bttv_emotes_url: str, trigger: str, bot_id: str):
 
     bot = Bot(trigger)
 
-    @loop(seconds=15)
+    @loop(seconds=update_interval)
     async def check_new_emotes():
         logging.info("Fetching new emotes")
         new_emotes = await get_new_emotes(bttv_emotes_url)
-        logging.info(f"Got new emotes: {new_emotes}")
 
         any_changed = False
         for emote in new_emotes:
             name = emote["code"]
             emote_id = emote["id"]
-
 
             for channel_id, channel_data in db.channels.items():
                 for emote_filter in channel_data["emote_filters"]:
@@ -85,18 +88,19 @@ def main(db_path: str, bttv_emotes_url: str, trigger: str, bot_id: str):
         await ctx.send(f"Added {new_emote_filter}")
 
     @bot.command(name="remove")
-    async def remove_emote_filter(ctx, new_emote_filter: str):
-        logging.info(f"Trying to remove emote filter {new_emote_filter} in channel {ctx.channel.name} (id: {ctx.channel.id}))")
+    async def remove_emote_filter(ctx, emote_filter: str):
+        logging.info(f"Trying to remove emote filter {emote_filter} in channel {ctx.channel.name} (id: {ctx.channel.id}))")
         try:
-            re.compile(new_emote_filter)
+            re.compile(emote_filter)
         except:
             await ctx.send("Invalid regular expression")
             return
 
-        db.remove_emote_filter(ctx.channel.id, new_emote_filter)
-        db.save(db_path)
-
-        await ctx.send(f"Removed {new_emote_filter}")
+        if db.remove_emote_filter(ctx.channel.id, emote_filter):
+            db.save(db_path)
+            await ctx.send(f"Removed {emote_filter}")
+        else:
+            await ctx.send(f"Could not remove {emote_filter}")
 
     @bot.command(name="reloaddb")
     async def reload_db(ctx):
