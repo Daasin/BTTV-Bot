@@ -1,0 +1,4 @@
+aiohttp
+click
+discord.py
+python-dotenv
