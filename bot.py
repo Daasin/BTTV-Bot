@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import click
 from db import BotDatabase
-from util import get_new_emotes
+from util import get_new_emotes, get_new_emotes_7tv
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -28,11 +28,19 @@ def setup_logging():
 
 @click.command()
 @click.option("--db-path", type=click.Path(dir_okay=False), default="db.json")
-@click.option("--bttv-emotes-url", type=click.STRING, default="https://api.betterttv.net/3/emotes/shared?limit=50")
 @click.option("--trigger", type=click.STRING, default="!")
 @click.option("--bot-id", type=click.STRING, default=lambda: os.environ.get("EMOTE_BOT_ID", ""))
+@click.option("--bttv-fetch-emotes-url", type=click.STRING, default="https://api.betterttv.net/3/emotes/shared?limit=50")
+@click.option("--ffz-fetch-emotes-url", type=click.STRING, default="https://api.frankerfacez.com/v1/emotes?sensitive=false&sort=created-desc&high_dpi=off&page=1&per_page=50")
+@click.option("--stv-fetch-emotes-url", type=click.STRING, default="https://api.7tv.app/v2/gql")
+@click.option("--bttv-emotes-url", type=click.STRING, default="https://cdn.betterttv.net/emote/%s/3x")
+@click.option("--ffz-emotes-url", type=click.STRING, default="https://cdn.frankerfacez.com/emote/%s/4")
+@click.option("--stv-emotes-url", type=click.STRING, default="https://7tv.app/emotes/%s/4x")
 @click.option("--update-interval", type=click.INT, default=30)
-def main(db_path: str, bttv_emotes_url: str, trigger: str, bot_id: str, update_interval: int):
+def main(db_path: str,
+    bttv_fetch_emotes_url: str, ffz_fetch_emotes_url: str, stv_fetch_emotes_url: str,
+    bttv_emotes_url: str, ffz_emotes_url: str, stv_emotes_url: str,
+    trigger: str, bot_id: str, update_interval: int):
     setup_logging()
 
     db = BotDatabase()
@@ -44,30 +52,82 @@ def main(db_path: str, bttv_emotes_url: str, trigger: str, bot_id: str, update_i
     bot = Bot(trigger)
 
     @loop(seconds=update_interval)
-    async def check_new_emotes():
-        logging.info("Fetching new emotes")
-        new_emotes = await get_new_emotes(bttv_emotes_url)
+    async def check_new_emotes_bttv():
+        logging.info("Fetching new bttv emotes")
+        new_emotes = await get_new_emotes(bttv_fetch_emotes_url)
 
         any_changed = False
         for emote in new_emotes:
             name = emote["code"]
             emote_id = emote["id"]
+            emote_db_key = f"bttv-{emote_id}"
 
             for channel_id, channel_data in db.channels.items():
                 for emote_filter in channel_data["emote_filters"]:
-                    if re.match(emote_filter, name) and name not in channel_data["sent_emotes"]:
+                    if re.match(emote_filter, name) and emote_db_key not in channel_data["sent_emotes"]:
                         channel = bot.get_channel(int(channel_id))
                         if channel is not None:
                             any_changed = True
-                            channel_data["sent_emotes"].append(name)
-                            await channel.send(f"{name} https://cdn.betterttv.net/emote/{emote_id}/3x")
+                            channel_data["sent_emotes"].append(emote_db_key)
+                            await channel.send(f"{name} {bttv_emotes_url % emote_id}")
                         else:
                             logging.error(f"Can't find channel with id {channel_id}")
             
         if any_changed:
             db.save(db_path)
 
-    @check_new_emotes.before_loop
+    @loop(seconds=update_interval)
+    async def check_new_emotes_ffz():
+        logging.info("Fetching new ffz emotes")
+        new_emotes = await get_new_emotes(ffz_fetch_emotes_url)
+
+        any_changed = False
+        for emote in new_emotes["emoticons"]:
+            name = emote["name"]
+            emote_id = emote["id"]
+            emote_db_key = f"ffz-{emote_id}"
+
+            for channel_id, channel_data in db.channels.items():
+                for emote_filter in channel_data["emote_filters"]:
+                    if re.match(emote_filter, name) and emote_db_key not in channel_data["sent_emotes"]:
+                        channel = bot.get_channel(int(channel_id))
+                        if channel is not None:
+                            any_changed = True
+                            channel_data["sent_emotes"].append(emote_db_key)
+                            await channel.send(f"{name} {ffz_emotes_url % emote_id}")
+                        else:
+                            logging.error(f"Can't find channel with id {channel_id}")
+            
+        if any_changed:
+            db.save(db_path)
+    
+    @loop(seconds=update_interval)
+    async def check_new_emotes_7tv():
+        logging.info("Fetching new 7tv emotes")
+        new_emotes = await get_new_emotes_7tv(stv_fetch_emotes_url)
+        any_changed = False
+        for emote in new_emotes["data"]["search_emotes"]:
+            name = emote["name"]
+            emote_id = emote["id"]
+            emote_db_key = f"7tv-{emote_id}"
+
+            for channel_id, channel_data in db.channels.items():
+                for emote_filter in channel_data["emote_filters"]:
+                    if re.match(emote_filter, name) and emote_db_key not in channel_data["sent_emotes"]:
+                        channel = bot.get_channel(int(channel_id))
+                        if channel is not None:
+                            any_changed = True
+                            channel_data["sent_emotes"].append(emote_db_key)
+                            await channel.send(f"{name} {stv_emotes_url % emote_id}")
+                        else:
+                            logging.error(f"Can't find channel with id {channel_id}")
+        if any_changed:
+            db.save(db_path)
+
+
+    @check_new_emotes_bttv.before_loop
+    @check_new_emotes_ffz.before_loop
+    @check_new_emotes_7tv.before_loop
     async def check_new_emotes_before():
         logging.info("Waiting for bot to be ready")
         await bot.wait_until_ready()
@@ -76,7 +136,7 @@ def main(db_path: str, bttv_emotes_url: str, trigger: str, bot_id: str, update_i
     @bot.command(name="add")
     @has_permissions(manage_messages=True)
     async def add_emote_filter(ctx, new_emote_filter: str):
-        logging.info(f"Trying to add emote filter {new_emote_filter} in channel {ctx.channel.name} (id: {ctx.channel.id}))")
+        logging.info(f"Trying to add emote filter {new_emote_filter} in channel {ctx.channel.name} (id: {ctx.channel.id})")
         try:
             re.compile(new_emote_filter)
         except:
@@ -91,7 +151,7 @@ def main(db_path: str, bttv_emotes_url: str, trigger: str, bot_id: str, update_i
     @bot.command(name="remove")
     @has_permissions(manage_messages=True)
     async def remove_emote_filter(ctx, emote_filter: str):
-        logging.info(f"Trying to remove emote filter {emote_filter} in channel {ctx.channel.name} (id: {ctx.channel.id}))")
+        logging.info(f"Trying to remove emote filter {emote_filter} in channel {ctx.channel.name} (id: {ctx.channel.id})")
         try:
             re.compile(emote_filter)
         except:
@@ -122,7 +182,7 @@ def main(db_path: str, bttv_emotes_url: str, trigger: str, bot_id: str, update_i
     @bot.command(name="clear")
     @has_permissions(manage_messages=True)
     async def remove_channel(ctx):
-        logging.info(f"Trying to remove channel {ctx.channel.name} (id: {ctx.channel.id}))")
+        logging.info(f"Trying to remove channel {ctx.channel.name} (id: {ctx.channel.id})")
 
         if db.remove_channel(ctx.channel.id):
             db.save(db_path)
@@ -130,7 +190,9 @@ def main(db_path: str, bttv_emotes_url: str, trigger: str, bot_id: str, update_i
         else:
             await ctx.send(f"Could not remove channel `{ctx.channel.name}` (maybe it wasn't even added?)")
 
-    check_new_emotes.start()
+    check_new_emotes_bttv.start()
+    check_new_emotes_ffz.start()
+    check_new_emotes_7tv.start()
 
     logging.info("Starting bot")
     bot.run(bot_id)
