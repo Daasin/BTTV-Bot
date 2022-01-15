@@ -35,7 +35,7 @@ def setup_logging():
 @click.option("--stv-fetch-emotes-url", type=click.STRING, default="https://api.7tv.app/v2/gql")
 @click.option("--bttv-emotes-url", type=click.STRING, default="https://cdn.betterttv.net/emote/%s/3x")
 @click.option("--ffz-emotes-url", type=click.STRING, default="https://cdn.frankerfacez.com/emote/%s/4")
-@click.option("--stv-emotes-url", type=click.STRING, default="https://7tv.app/emotes/%s/4x")
+@click.option("--stv-emotes-url", type=click.STRING, default="https://cdn.7tv.app/emote/%s/4x")
 @click.option("--update-interval", type=click.INT, default=30)
 def main(db_path: str,
     bttv_fetch_emotes_url: str, ffz_fetch_emotes_url: str, stv_fetch_emotes_url: str,
