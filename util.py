@@ -17,7 +17,7 @@ async def get_new_emotes_7tv(url):
             "pageSize": 22,
             "query": "",
             "sortBy": "age",
-            "sortOrder": 0,
+            "sortOrder": 1,
             "submitted_by": None,
         }
     }
